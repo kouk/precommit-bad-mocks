@@ -1,0 +1,6 @@
+-   id: nonexistent-mock-methods
+    name: Find nonexistent mock methods
+    description: This hook detects bad mock method calls.
+    entry: bad-mocks
+    language: python
+    types: [python]
