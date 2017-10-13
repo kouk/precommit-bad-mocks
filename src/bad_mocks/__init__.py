@@ -1,13 +1,11 @@
 #!/usr/bin/python
-
-# taken from https://gist.github.com/mrtyler/995fcb4282a9d15de625
-
-import compiler
-import compiler.ast
+from __future__ import print_function
+import ast
 import optparse
 import sys
 
-class MockChecker(object):
+
+class MockChecker(ast.NodeVisitor):
     def __init__(self):
         self.errors = 0
         self.current_filename = ""
@@ -23,24 +21,33 @@ class MockChecker(object):
 
     def check_files(self, files):
         for file in files:
-           self.check_file(file)
+            self.check_file(file)
 
     def check_file(self, filename):
         self.current_filename = filename
         try:
-            ast = compiler.parseFile(filename)
-        except SyntaxError, error:
-            print >>sys.stderr, "SyntaxError on file %s:%d" % (filename, error.lineno)
+            with open(filename) as f:
+                node = ast.parse(f.read())
+        except SyntaxError as error:
+            print("SyntaxError on file {}:{}".format(filename, error.lineno),
+                  file=sys.stderr)
             return
-        compiler.walk(ast, self)
+        self.visit(node)
 
-    def visitGetattr(self, node):
-        if node.attrname in self.non_existent_methods:
-            print >>sys.stderr, "%s:%d: you may have called a nonexistent method on mock" % (self.current_filename, node.lineno)
+    def visit_Call(self, node):
+        if not hasattr(node.func, 'attr'):
+            return
+        if node.func.attr in self.non_existent_methods:
+            print("{}:{}: maybe you called a nonexistent mock method".format(
+                self.current_filename, node.lineno), file=sys.stderr)
             self.errors += 1
 
+
 def main():
-    parser = optparse.OptionParser(usage="%prog [options] file [files]", description="Checks that the test file does not contain non-existent mock methods")
+    parser = optparse.OptionParser(
+        usage="%prog [options] file [files]",
+        description=("Checks that the test file does "
+                     "not contain non-existent mock methods"))
     (opts, files) = parser.parse_args()
     if len(files) == 0:
         parser.error("No filenames provided")
@@ -48,6 +55,7 @@ def main():
     checker = MockChecker()
     checker.check_files(files)
     return 1 if checker.errors else 0
+
 
 if __name__ == '__main__':
     sys.exit(main())
